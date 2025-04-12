@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-configuration PUBLIC
+        "-//Hibernate/Hibernate Configuration DTD 3.0//EN"
+        "http://www.hibernate.org/dtd/hibernate-configuration-3.0.dtd">
+<hibernate-configuration>
+    <session-factory>
+        <!-- Database connection settings -->
+        <property name="hibernate.connection.driver_class">com.mysql.cj.jdbc.Driver</property>
+        <property name="hibernate.connection.url">jdbc:mysql://localhost:3306/scrappers</property>
+        <property name="hibernate.connection.username">root</property>
+        <property name="hibernate.connection.password">Y1a2s3!?</property>
+
+        <!-- JDBC connection pool settings -->
+        <property name="hibernate.connection.pool_size">10</property>
+
+        <!-- SQL dialect -->
+        <property name="hibernate.dialect">org.hibernate.dialect.MySQL8Dialect</property>
+
+        <!-- Echo all executed SQL to stdout -->
+        <property name="show_sql">true</property>
+
+        <!-- Format SQL for better readability -->
+        <property name="hibernate.format_sql">true</property>
+
+        <!-- Hibernate schema update options -->
+        <property name="hibernate.hbm2ddl.auto">update</property>
+
+        <!-- Add entity mappings -->
+        <mapping class="jamals.user"/>
+        <mapping class="jamals.question"/>
+        <mapping class="jamals.answer"/>
+        <mapping class="jamals.tag"/>
+    </session-factory>
+</hibernate-configuration>

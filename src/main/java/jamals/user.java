@@ -12,7 +12,11 @@ import javax.persistence.FetchType;
 import javax.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+/**
+ * Entity representing a StackOverflow user.
+ */
 @Entity
 @Table(name = "users")
 public class user {
@@ -44,7 +48,24 @@ public class user {
     @OneToMany(mappedBy = "author", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<answer> answers = new ArrayList<>();
 
-    // Getters and setters (updated for new field names)
+    /**
+     * Default constructor required by Hibernate.
+     */
+    public user() {
+    }
+
+    /**
+     * Parameterized constructor for creating users with basic information.
+     */
+    public user(String nickName, int reputationScore, int gBadge, int sBadge, int bBadge) {
+        this.nickName = nickName;
+        this.reputationScore = reputationScore;
+        this.gBadge = gBadge;
+        this.sBadge = sBadge;
+        this.bBadge = bBadge;
+    }
+
+    // Getters and setters
     public int getId() {
         return id;
     }
@@ -67,6 +88,14 @@ public class user {
 
     public int getbBadge() {
         return bBadge;
+    }
+
+    public List<question> getQuestions() {
+        return questions;
+    }
+
+    public List<answer> getAnswers() {
+        return answers;
     }
 
     public void setId(int id) {
@@ -93,8 +122,61 @@ public class user {
         this.bBadge = bBadge;
     }
 
+    public void setQuestions(List<question> questions) {
+        this.questions = questions;
+    }
+
+    public void setAnswers(List<answer> answers) {
+        this.answers = answers;
+    }
+
+    /**
+     * Add a question to this user's list of questions.
+     */
+    public void addQuestion(question q) {
+        questions.add(q);
+        q.setUser(this);
+    }
+
+    /**
+     * Add an answer to this user's list of answers.
+     */
+    public void addAnswer(answer a) {
+        answers.add(a);
+        a.setUser(this);
+    }
+
+    /**
+     * Print user details to console.
+     */
     public void printUser() {
-        System.out.println("name: " + this.nickName + " | reputaion score: " + this.reputationScore + "| badges: gold "
-                + this.gBadge + ",silver " + this.sBadge + ",bronze " + this.bBadge);
+        System.out.println("name: " + this.nickName + " | reputation score: " + this.reputationScore +
+                " | badges: gold " + this.gBadge + ", silver " + this.sBadge + ", bronze " + this.bBadge);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        user user = (user) o;
+        return id == user.id ||
+                (nickName != null && nickName.equals(user.nickName));
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, nickName);
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", nickname='" + nickName + '\'' +
+                ", reputationScore=" + reputationScore +
+                ", badges=" + gBadge + "g/" + sBadge + "s/" + bBadge + "b" +
+                '}';
     }
 }

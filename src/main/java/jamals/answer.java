@@ -8,9 +8,12 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
-
 import javax.persistence.Table;
+import java.util.Objects;
 
+/**
+ * Entity representing a StackOverflow answer.
+ */
 @Entity
 @Table(name = "answers")
 public class answer {
@@ -21,21 +24,37 @@ public class answer {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    // A question can have many answers
+    // An answer belongs to a question
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id")
     private question question;
 
-    // A user can provide many answers
+    // An answer is provided by a user
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private user author;
 
+    /**
+     * Default constructor required by Hibernate.
+     */
+    public answer() {
+    }
+
+    /**
+     * Parameterized constructor for creating answers with basic information.
+     */
+    public answer(String content, question question, user author) {
+        this.content = content;
+        this.question = question;
+        this.author = author;
+    }
+
+    // Getters and setters
     public String getContent() {
         return content;
     }
 
-    public question getQestion() {
+    public question getQuestion() {
         return question;
     }
 
@@ -63,9 +82,41 @@ public class answer {
         this.question = question;
     }
 
+    /**
+     * Print answer details to console.
+     */
     public void printAnswer() {
         System.out.println("answer id : " + this.id);
         System.out.println("answer content : " + this.content);
-        this.author.printUser();
+        if (this.author != null) {
+            this.author.printUser();
+        } else {
+            System.out.println("author: unknown");
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        answer answer = (answer) o;
+        return id == answer.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "Answer{" +
+                "id=" + id +
+                ", content='"
+                + (content != null ? content.substring(0, Math.min(content.length(), 30)) + "..." : "null") + '\'' +
+                ", author=" + (author != null ? author.getNickName() : "unknown") +
+                '}';
     }
 }

@@ -1,10 +1,10 @@
 package jamals;
 
-import jamals.question;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Objects;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Column;
@@ -20,6 +20,9 @@ import javax.persistence.ManyToMany;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 
+/**
+ * Entity representing a StackOverflow question.
+ */
 @Entity
 @Table(name = "questions")
 public class question {
@@ -50,6 +53,24 @@ public class question {
     @JoinTable(name = "question_tags", joinColumns = @JoinColumn(name = "question_id"), inverseJoinColumns = @JoinColumn(name = "tag_id"))
     private Set<tag> tags = new HashSet<>();
 
+    /**
+     * Default constructor required by Hibernate.
+     */
+    public question() {
+    }
+
+    /**
+     * Parameterized constructor for creating questions with basic information.
+     */
+    public question(String title, String content, int votes, int nAnswers, int views) {
+        this.title = title;
+        this.content = content;
+        this.votes = votes;
+        this.nAnswers = nAnswers;
+        this.views = views;
+    }
+
+    // Getters and setters
     public user getUser() {
         return user;
     }
@@ -114,14 +135,49 @@ public class question {
         this.views = views;
     }
 
-    public void setAnswers(ArrayList<answer> answers) {
+    public void setAnswers(List<answer> answers) {
         this.answers = answers;
     }
 
-    public void setTags(ArrayList<tag> tags) {
-        this.tags = new HashSet<>(tags);
+    public void setTags(Set<tag> tags) {
+        this.tags = tags;
     }
 
+    /**
+     * Add an answer to this question.
+     */
+    public void addAnswer(answer answer) {
+        answers.add(answer);
+        answer.setQuestion(this);
+    }
+
+    /**
+     * Remove an answer from this question.
+     */
+    public void removeAnswer(answer answer) {
+        answers.remove(answer);
+        answer.setQuestion(null);
+    }
+
+    /**
+     * Add a tag to this question.
+     */
+    public void addTag(tag tag) {
+        tags.add(tag);
+        tag.getQuestions().add(this);
+    }
+
+    /**
+     * Remove a tag from this question.
+     */
+    public void removeTag(tag tag) {
+        tags.remove(tag);
+        tag.getQuestions().remove(this);
+    }
+
+    /**
+     * Print question details to console.
+     */
     public void printQuestion() {
         System.out.println("----------------------------infos----------------------------");
         System.out.println("title | " + this.title);
@@ -131,7 +187,6 @@ public class question {
         System.out.println("-----------------------------tags-------------------------------");
         for (tag t : this.tags) {
             System.out.print(t.getTagName() + ",");
-
         }
         System.out.println();
         System.out.println("------------------------------content------------------------------");
@@ -141,5 +196,32 @@ public class question {
             a.printAnswer();
         }
         System.out.println("---------------------------------------------------------------------");
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        question question = (question) o;
+        return id == question.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    @Override
+    public String toString() {
+        return "Question{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", votes=" + votes +
+                ", answers=" + nAnswers +
+                ", views=" + views +
+                ", tags=" + tags.size() +
+                '}';
     }
 }

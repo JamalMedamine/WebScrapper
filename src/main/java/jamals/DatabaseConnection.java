@@ -4,36 +4,64 @@ import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+import org.hibernate.query.Query;
 
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.util.Enumeration;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.ArrayList;
+
+/**
+ * Manages database connections and operations for the StackOverflow scraper.
+ */
 public class DatabaseConnection {
+    private static final Logger LOGGER = Logger.getLogger(DatabaseConnection.class.getName());
     private static SessionFactory sessionFactory;
     private static boolean initialized = false;
+    private static String databaseUrl;
 
-    // Private constructor to prevent instantiation
     private DatabaseConnection() {
     }
 
+    /**
+     * Initialize the database connection.
+     *
+     * @param url      Database URL
+     * @param user     Database username
+     * @param password Database password
+     */
     public static synchronized void initialize(String url, String user, String password) {
         if (initialized) {
+            LOGGER.info("Database already initialized");
             return;
         }
 
         try {
+            LOGGER.info("Initializing database connection: " + url);
+            databaseUrl = url;
+
             Configuration configuration = new Configuration();
 
-            // Database connection properties
             configuration.setProperty("hibernate.connection.driver_class", "com.mysql.cj.jdbc.Driver");
             configuration.setProperty("hibernate.connection.url", url);
             configuration.setProperty("hibernate.connection.username", user);
             configuration.setProperty("hibernate.connection.password", password);
             configuration.setProperty("hibernate.dialect", "org.hibernate.dialect.MySQL8Dialect");
 
-            // Other settings
-            configuration.setProperty("hibernate.show_sql", "true");
+            configuration.setProperty("hibernate.connection.pool_size", "10");
+            configuration.setProperty("hibernate.current_session_context_class", "thread");
+            configuration.setProperty("hibernate.cache.provider_class", "org.hibernate.cache.internal.NoCacheProvider");
+            configuration.setProperty("hibernate.connection.autocommit", "false");
+            configuration.setProperty("hibernate.connection.release_mode", "after_transaction");
+            configuration.setProperty("hibernate.jdbc.batch_size", "30");
+
+            configuration.setProperty("hibernate.show_sql", "false");
             configuration.setProperty("hibernate.format_sql", "true");
+            configuration.setProperty("hibernate.use_sql_comments", "true");
             configuration.setProperty("hibernate.hbm2ddl.auto", "update");
 
-            // Add entity classes
             configuration.addAnnotatedClass(user.class);
             configuration.addAnnotatedClass(question.class);
             configuration.addAnnotatedClass(answer.class);
@@ -41,12 +69,19 @@ public class DatabaseConnection {
 
             sessionFactory = configuration.buildSessionFactory();
             initialized = true;
+            LOGGER.info("Hibernate initialized successfully");
 
         } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Failed to initialize Hibernate", e);
             throw new RuntimeException("Failed to initialize Hibernate", e);
         }
     }
 
+    /**
+     * 
+     *
+     * @return
+     */
     public static SessionFactory getSessionFactory() {
         if (!initialized) {
             throw new IllegalStateException("Hibernate not initialized. Call initialize() first.");
@@ -56,141 +91,153 @@ public class DatabaseConnection {
 
     public static void shutdown() {
         if (sessionFactory != null && !sessionFactory.isClosed()) {
-            sessionFactory.close();
-        }
-    }
-
-    public static void QuestionDataBaseUpdate(int questionId, String title, String content, int votes, int nAnswers,
-            int views, user user) {
-        Transaction transaction = null;
-        Session session = null;
-        question q = new question();
-        try {
-            session = sessionFactory.openSession();
-            transaction = session.beginTransaction();
-
-            user existingUser = session.createQuery("FROM user WHERE  nickName = :username", user.class)
-                    .setParameter("username", user.getNickName())
-                    .uniqueResult();
-
-            session.saveOrUpdate(q);
-            if (existingUser == null || user == null) {
-                session.save(user);
-            } else {
-                user = existingUser;
-                session.merge(user);
-            }
-            q.setTitle(title);
-            q.setContent(content);
-            q.setVotes(votes);
-
-            q.setnAnswers(nAnswers);
-
-            q.setViews(views);
-            q.setUser(user);
-
-            session.merge(q);
-            transaction.commit();
-        } catch (Exception e) {
-            if (transaction != null) {
-                transaction.rollback(); // Rollback in case of an error
-            }
-            e.printStackTrace();
-        } finally {
-            if (session != null) {
-                session.close(); // Ensuring session is closed
-            }
-        }
-    }
-
-    public static void AnswerDataBaseUpdate(int answerId, String content, question question, user user) {
-        Transaction transaction = null;
-        Session session = null;
-        try {
-            // Add this to your answerScrapper method
             try {
-                // Add a delay between requests to avoid rate limiting
-                Thread.sleep(2000); // 2-second delay
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                LOGGER.info("Closing Hibernate SessionFactory...");
+                sessionFactory.close();
+
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    LOGGER.warning("Thread interrupted while waiting for cleanup");
+                }
+
+                try {
+                    LOGGER.info("Deregistering JDBC driver...");
+                    Enumeration<Driver> drivers = DriverManager.getDrivers();
+                    while (drivers.hasMoreElements()) {
+                        Driver driver = drivers.nextElement();
+                        if (driver.getClass().getName().contains("com.mysql")) {
+                            DriverManager.deregisterDriver(driver);
+                            LOGGER.info("Deregistered driver: " + driver);
+                        }
+                    }
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Error deregistering driver: " + e.getMessage(), e);
+                }
+                System.gc();
+
+                LOGGER.info("Database resources released successfully");
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Error during shutdown: " + e.getMessage(), e);
             }
+        }
+    }
+
+    /**
+     * Save or update a complete question with all its relationships.
+     *
+     * @param q The question to save
+     */
+    public static void saveCompleteQuestion(question q) {
+        if (q == null)
+            return;
+
+        Transaction transaction = null;
+        Session session = null;
+
+        try {
+            LOGGER.info("Starting saveCompleteQuestion for question ID: " + q.getId());
+
             session = sessionFactory.openSession();
             transaction = session.beginTransaction();
 
-            // FIRST: Ensure the user exists in the database
-            user existingUser = null;
-            if (user != null && user.getNickName() != null && !user.getNickName().trim().isEmpty()) {
-                existingUser = session.createQuery("FROM user WHERE nickName = :username", user.class)
-                        .setParameter("username", user.getNickName())
-                        .uniqueResult();
+            if (q.getUser() != null) {
+                saveUserSafely(session, q.getUser());
             }
 
-            if (existingUser == null && user != null) {
-                // Save new user first to get an ID
-                session.save(user);
-            } else if (existingUser != null) {
-                // Use the existing user from the database
-                user = existingUser;
+            for (answer a : q.getAnswers()) {
+                if (a.getUser() != null) {
+                    saveUserSafely(session, a.getUser());
+                }
             }
 
-            // SECOND: Ensure the question exists in the database
+            for (tag t : q.getTags()) {
+                tag existingTag = session.get(tag.class, t.getTagName());
+                if (existingTag == null) {
+                    session.save(t);
+                }
+            }
+
+            session.flush();
+
             question existingQuestion = null;
-            if (question != null && question.getId() > 0) {
-                existingQuestion = session.get(question.class, question.getId());
+            if (q.getId() > 0) {
+                existingQuestion = session.get(question.class, q.getId());
             }
 
-            if (existingQuestion == null && question != null) {
-                // Save question first to get an ID
-                session.save(question);
-            } else if (existingQuestion != null) {
-                // Use the existing question from the database
-                question = existingQuestion;
-            }
+            if (existingQuestion == null) {
+                ArrayList<answer> tempAnswers = new ArrayList<>(q.getAnswers());
+                q.getAnswers().clear();
 
-            // Check if answer with this ID already exists
-            answer existingAnswer = null;
-            if (answerId > 0) {
-                existingAnswer = session.get(answer.class, answerId);
-            }
+                session.save(q);
+                LOGGER.info("Inserted new question with ID: " + q.getId());
 
-            if (existingAnswer != null) {
-                // Update existing answer
-                existingAnswer.setContent(content);
+                session.flush();
 
-                // Only set references if they're valid entities
-                if (question != null) {
-                    existingAnswer.setQuestion(question);
+                for (answer a : tempAnswers) {
+                    a.setQuestion(q);
+
+                    a.setId(0);
+                    session.save(a);
+                    q.getAnswers().add(a);
+
+                    session.flush();
                 }
-                if (user != null) {
-                    existingAnswer.setUser(user);
-                }
-
-                session.update(existingAnswer);
             } else {
-                // Create new answer
-                answer a = new answer();
-                if (answerId > 0) {
-                    a.setId(answerId);
-                }
-                a.setContent(content);
-
-                // Only set references if they're valid entities
-                if (question != null) {
-                    a.setQuestion(question);
-                }
-                if (user != null) {
-                    a.setUser(user);
+                existingQuestion.setTitle(q.getTitle());
+                existingQuestion.setContent(q.getContent());
+                existingQuestion.setVotes(q.getVotes());
+                existingQuestion.setnAnswers(q.getnAnswers());
+                existingQuestion.setViews(q.getViews());
+                if (q.getUser() != null) {
+                    existingQuestion.setUser(q.getUser());
                 }
 
-                session.save(a);
+                existingQuestion.getTags().clear();
+                existingQuestion.getTags().addAll(q.getTags());
+
+                session.update(existingQuestion);
+                LOGGER.info("Updated existing question with ID: " + existingQuestion.getId());
+
+                session.flush();
+
+                ArrayList<answer> tempAnswers = new ArrayList<>(q.getAnswers());
+                for (answer a : tempAnswers) {
+                    a.setQuestion(existingQuestion);
+
+                    if (a.getId() > 0) {
+                        answer existingAnswer = session.get(answer.class, a.getId());
+
+                        if (existingAnswer != null) {
+                            existingAnswer.setContent(a.getContent());
+                            if (a.getUser() != null) {
+                                existingAnswer.setUser(a.getUser());
+                            }
+                            session.update(existingAnswer);
+                        } else {
+                            a.setId(0);
+                            session.save(a);
+                        }
+                    } else {
+
+                        session.save(a);
+                    }
+
+                    session.flush();
+                }
             }
 
             transaction.commit();
+            LOGGER.info("Successfully saved question with ID: " + q.getId());
+
         } catch (Exception e) {
             if (transaction != null) {
+                LOGGER.log(Level.SEVERE, "Rolling back transaction due to error: " + e.getMessage(), e);
                 transaction.rollback();
             }
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error saving question", e);
+            throw e;
         } finally {
             if (session != null) {
                 session.close();
@@ -198,97 +245,45 @@ public class DatabaseConnection {
         }
     }
 
-    public static void QuestionTagDataBaseUpdate(tag t, int questionId, String tagName) {
-        Transaction transaction = null;
-        Session session = null;
-        try {
-            session = sessionFactory.openSession();
-            transaction = session.beginTransaction();
-
-            t = (tag) session.merge(t);
-            t.setTagName(tagName);
-
-            session.saveOrUpdate(t);
-            transaction.commit();
-        } catch (Exception e) {
-            if (transaction != null) {
-                transaction.rollback();
-            }
-            e.printStackTrace();
-        } finally {
-            if (session != null) {
-                session.close();
-            }
+    /**
+     * Helper method to safely save a user entity.
+     *
+     * @param session The Hibernate session
+     * @param u       The user to save
+     */
+    private static void saveUserSafely(Session session, user u) {
+        if (u == null || u.getNickName() == null || u.getNickName().trim().isEmpty()) {
+            return;
         }
-    }
 
-    public static void UserDataBaseUpdate(user u, int userId, String nickName, int reputationScore, int gBadge,
-            int sBadge, int bBadge) {
-        Transaction transaction = null;
-        Session session = null;
         try {
-            session = sessionFactory.openSession();
-            transaction = session.beginTransaction();
+            String queryString = "FROM user WHERE nickName = :nickname";
+            Query<user> query = session.createQuery(queryString, user.class)
+                    .setParameter("nickname", u.getNickName());
 
-            // First check if user with same username already exists
-            user existingUser = null;
-            if (nickName != null && !nickName.trim().isEmpty()) {
-                existingUser = session.createQuery("FROM user WHERE nickName = :nickname", user.class)
-                        .setParameter("nickname", nickName)
-                        .uniqueResult();
-            }
+            user existingUser = query.uniqueResult();
 
             if (existingUser != null) {
-                // User already exists, update existing user
-                existingUser.setReputationScore(reputationScore);
-                existingUser.setgBadge(gBadge);
-                existingUser.setsBadge(sBadge);
-                existingUser.setbBadge(bBadge);
+
+                existingUser.setReputationScore(u.getReputationScore());
+                existingUser.setgBadge(u.getgBadge());
+                existingUser.setsBadge(u.getsBadge());
+                existingUser.setbBadge(u.getbBadge());
+
+                u.setId(existingUser.getId());
+
                 session.update(existingUser);
+                LOGGER.info(
+                        "Updated existing user: " + existingUser.getNickName() + " with ID: " + existingUser.getId());
             } else {
-                // New user, set properties and save
-                u.setNickName(nickName);
-                u.setReputationScore(reputationScore);
-                u.setgBadge(gBadge);
-                u.setsBadge(sBadge);
-                u.setbBadge(bBadge);
                 session.save(u);
+                LOGGER.info("Saved new user: " + u.getNickName() + " with ID: " + u.getId());
             }
 
-            transaction.commit();
+            session.flush();
         } catch (Exception e) {
-            if (transaction != null) {
-                transaction.rollback();
-            }
-            e.printStackTrace();
-        } finally {
-            if (session != null) {
-                session.close();
-            }
-        }
-    }
-
-    public static void TagDataBaseUpdate(tag t, String tagName) {
-        Session session = null;
-        Transaction transaction = null;
-        try {
-            session = sessionFactory.openSession();
-            transaction = session.beginTransaction();
-
-            t = (tag) session.merge(t);
-            t.setTagName(tagName);
-
-            session.saveOrUpdate(t);
-            transaction.commit();
-        } catch (Exception e) {
-            if (transaction != null) {
-                transaction.rollback();
-            }
-            e.printStackTrace();
-        } finally {
-            if (session != null) {
-                session.close();
-            }
+            LOGGER.log(Level.SEVERE, "Error saving user: " + e.getMessage(), e);
+            throw e;
         }
     }
 

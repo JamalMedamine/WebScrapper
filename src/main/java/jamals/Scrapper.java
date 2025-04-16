@@ -8,12 +8,18 @@ import org.jsoup.select.Elements;
 import java.io.IOException;
 import java.util.Scanner;
 import java.util.ArrayList;
+import java.util.List;
 import jamals.DatabaseConnection;
+
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Hello world!
  */
 public class Scrapper {
+    private static final Logger LOGGER = Logger.getLogger(Scrapper.class.getName());
 
     ArrayList<question> questions = new ArrayList<question>();
 
@@ -149,44 +155,79 @@ public class Scrapper {
         }
     }
 
+    // Removed duplicate main method to resolve the error
+    /**
+     * Get the list of scraped questions.
+     *
+     * @return The list of questions
+     */
+    public List<question> getQuestions() {
+        return this.questions;
+    }
+
+    /**
+     * Main method to run the scraper.
+     *
+     * @param args Command line arguments
+     */
     public static void main(String[] args) {
-        Scrapper qS = new Scrapper();
+        try {
+            LOGGER.info("Starting StackOverflow scraper...");
+            Scrapper scraper = new Scrapper();
 
-        DatabaseConnection.initialize(
-                "jdbc:mysql://localhost:3306/scrappers",
-                "root",
-                "Y1a2s3!?");
+            // Initialize database connection
+            DatabaseConnection.initialize(
+                    "jdbc:mysql://localhost:3306/scrappers",
+                    "root",
+                    "Y1a2s3!?");
+            LOGGER.info("Database connection initialized");
 
-        qS.questionScrapper("Newest", 5);
+            // Scrape questions from the "Newest" tab, reduced to 2 pages due to IP
+            // detection
+            scraper.questionScrapper("Newest", 2);
+            LOGGER.info("Scraped " + scraper.getQuestions().size() + " questions");
 
-        for (question q : qS.questions) {
-            qS.answerScrapper(q);
+            // Scrape answers for each question and save to database
+            int successCount = 0;
+            for (question q : scraper.getQuestions()) {
+                try {
+                    // Scrape answers for this question
+                    scraper.answerScrapper(q);
 
-            for (tag t : q.getTags()) {
-                DatabaseConnection.TagDataBaseUpdate(t, t.getTagName());
+                    // Save question and all its data to database
+                    DatabaseConnection.saveCompleteQuestion(q);
+
+                    // Print question details
+                    q.printQuestion();
+
+                    successCount++;
+
+                    // Add extra delay between questions to avoid detection
+                    // scraper.sleepRandomTime(MIN_DELAY_MS * 2, MAX_DELAY_MS * 2);
+
+                } catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, "Error processing question ID " + q.getId(), e);
+                    // Continue with next question
+                }
             }
-            user u = new user();
-            DatabaseConnection.UserDataBaseUpdate(u, q.getUser().getId(), q.getUser().getNickName(),
-                    q.getUser().getReputationScore(), q.getUser().getgBadge(),
-                    q.getUser().getsBadge(), q.getUser().getbBadge());
-            DatabaseConnection.QuestionDataBaseUpdate(q.getId(), q.getTitle(),
-                    q.getContent(), q.getVotes(),
-                    q.getnAnswers(), q.getViews(), q.getUser());
 
-            for (answer a : q.getAnswers()) {
-                user aUser = new user();
-                DatabaseConnection.UserDataBaseUpdate(aUser, a.getUser().getId(),
-                        a.getUser().getNickName(),
-                        a.getUser().getReputationScore(), a.getUser().getgBadge(),
-                        a.getUser().getsBadge(),
-                        a.getUser().getbBadge());
-                DatabaseConnection.AnswerDataBaseUpdate(a.getId(), a.getContent(), q,
-                        a.getUser());
+            LOGGER.info("Scraping completed. Successfully processed " + successCount + " out of "
+                    + scraper.getQuestions().size() + " questions.");
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error in main execution", e);
+        } finally {
+            // Properly shutdown database connection
+            try {
+                LOGGER.info("Shutting down database connection...");
+                DatabaseConnection.shutdown();
+
+                // Give time for shutdown to complete
+                TimeUnit.SECONDS.sleep(2);
+                LOGGER.info("Shutdown complete");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                LOGGER.warning("Interrupted during shutdown");
             }
-            q.printQuestion();
         }
-
-        // Shutdown the connection at the end of all operations
-        DatabaseConnection.shutdown();
     }
 }

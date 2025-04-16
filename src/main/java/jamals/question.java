@@ -20,9 +20,6 @@ import javax.persistence.ManyToMany;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 
-/**
- * Entity representing a StackOverflow question.
- */
 @Entity
 @Table(name = "questions")
 public class question {
@@ -39,29 +36,20 @@ public class question {
     private int nAnswers;
     private int views;
 
-    // A question is asked by a single user
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private user user;
 
-    // A question can have many answers
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<answer> answers = new ArrayList<>();
 
-    // A question can have many tags
     @ManyToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE }, fetch = FetchType.LAZY)
     @JoinTable(name = "question_tags", joinColumns = @JoinColumn(name = "question_id"), inverseJoinColumns = @JoinColumn(name = "tag_id"))
     private Set<tag> tags = new HashSet<>();
 
-    /**
-     * Default constructor required by Hibernate.
-     */
     public question() {
     }
 
-    /**
-     * Parameterized constructor for creating questions with basic information.
-     */
     public question(String title, String content, int votes, int nAnswers, int views) {
         this.title = title;
         this.content = content;
@@ -70,7 +58,6 @@ public class question {
         this.views = views;
     }
 
-    // Getters and setters
     public user getUser() {
         return user;
     }
@@ -143,41 +130,26 @@ public class question {
         this.tags = tags;
     }
 
-    /**
-     * Add an answer to this question.
-     */
     public void addAnswer(answer answer) {
         answers.add(answer);
         answer.setQuestion(this);
     }
 
-    /**
-     * Remove an answer from this question.
-     */
     public void removeAnswer(answer answer) {
         answers.remove(answer);
         answer.setQuestion(null);
     }
 
-    /**
-     * Add a tag to this question.
-     */
     public void addTag(tag tag) {
         tags.add(tag);
         tag.getQuestions().add(this);
     }
 
-    /**
-     * Remove a tag from this question.
-     */
     public void removeTag(tag tag) {
         tags.remove(tag);
         tag.getQuestions().remove(this);
     }
 
-    /**
-     * Print question details to console.
-     */
     public void printQuestion() {
         System.out.println("----------------------------infos----------------------------");
         System.out.println("title | " + this.title);

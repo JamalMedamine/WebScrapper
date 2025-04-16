@@ -14,9 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Entity representing a StackOverflow user.
- */
 @Entity
 @Table(name = "users")
 public class user {
@@ -40,23 +37,15 @@ public class user {
     @Column(name = "bronze_badges")
     private int bBadge;
 
-    // A user can ask many questions
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<question> questions = new ArrayList<>();
 
-    // A user can answer many questions
     @OneToMany(mappedBy = "author", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<answer> answers = new ArrayList<>();
 
-    /**
-     * Default constructor required by Hibernate.
-     */
     public user() {
     }
 
-    /**
-     * Parameterized constructor for creating users with basic information.
-     */
     public user(String nickName, int reputationScore, int gBadge, int sBadge, int bBadge) {
         this.nickName = nickName;
         this.reputationScore = reputationScore;
@@ -65,7 +54,6 @@ public class user {
         this.bBadge = bBadge;
     }
 
-    // Getters and setters
     public int getId() {
         return id;
     }
@@ -130,25 +118,16 @@ public class user {
         this.answers = answers;
     }
 
-    /**
-     * Add a question to this user's list of questions.
-     */
     public void addQuestion(question q) {
         questions.add(q);
         q.setUser(this);
     }
 
-    /**
-     * Add an answer to this user's list of answers.
-     */
     public void addAnswer(answer a) {
         answers.add(a);
         a.setUser(this);
     }
 
-    /**
-     * Print user details to console.
-     */
     public void printUser() {
         System.out.println("name: " + this.nickName + " | reputation score: " + this.reputationScore +
                 " | badges: gold " + this.gBadge + ", silver " + this.sBadge + ", bronze " + this.bBadge);

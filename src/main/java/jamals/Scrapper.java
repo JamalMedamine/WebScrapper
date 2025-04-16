@@ -6,18 +6,14 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
-import java.util.Scanner;
+
 import java.util.ArrayList;
 import java.util.List;
-import jamals.DatabaseConnection;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Hello world!
- */
 public class Scrapper {
     private static final Logger LOGGER = Logger.getLogger(Scrapper.class.getName());
 
@@ -34,11 +30,11 @@ public class Scrapper {
 
     public int toNumber(String input) {
         if (input == null || input.trim().isEmpty()) {
-            return 0; // Return 0 if input is empty
+            return 0;
         }
 
-        input = input.toLowerCase().trim().replace(",", "."); // Handle "15,6k"
-        String[] parts = input.split("\\s+"); // Split by spaces
+        input = input.toLowerCase().trim().replace(",", ".");
+        String[] parts = input.split("\\s+");
 
         for (String part : parts) {
             try {
@@ -53,7 +49,7 @@ public class Scrapper {
         }
 
         System.err.println("No valid number found in input: '" + input + "'");
-        return 0; // Return 0 if no number was found
+        return 0;
     }
 
     public void questionScrapper(String tab, int nPages) {
@@ -65,17 +61,14 @@ public class Scrapper {
                 for (Element q : questions) {
                     question question = new question();
 
-                    // Extracting ID
                     String idText = q.id();
                     if (!idText.isEmpty() && idText.length() > 17) {
                         question.setId(Integer.parseInt(idText.substring(17)));
                     }
 
-                    // Extracting title and content
                     question.setTitle(q.select("h3 > a").text());
                     question.setContent(q.select(".s-post-summary--content-excerpt").text());
 
-                    // Extracting tags
                     Elements tags = q.select("a.s-tag.post-tag.flex--item.mt0");
                     for (Element t : tags) {
                         tag tag = new tag();
@@ -83,9 +76,8 @@ public class Scrapper {
                         question.getTags().add(tag);
                     }
 
-                    // Extracting votes, answers, and views safely
                     Elements stats = q.select(".s-post-summary--stats-item-number");
-                    if (stats.size() >= 3) { // Ensure all three elements exist
+                    if (stats.size() >= 3) {
                         question.setVotes(toNumber(stats.get(0).text()));
                         question.setnAnswers(toNumber(stats.get(1).text()));
                         question.setViews(toNumber(stats.get(2).text()));
@@ -95,9 +87,8 @@ public class Scrapper {
                         question.setViews(0);
                     }
 
-                    // Extracting user details
                     user u = new user();
-                    Elements userBlock = q.select(".s-user-card--link"); // Corrected selector
+                    Elements userBlock = q.select(".s-user-card--link");
                     if (!userBlock.isEmpty()) {
                         u.setNickName(userBlock.text());
                         u.setReputationScore(toNumber(q.select("span.reputation-score").text()));
@@ -121,7 +112,6 @@ public class Scrapper {
         try {
             Document doc = Jsoup.connect("https://stackoverflow.com/questions/" + id + "/" + title).get();
 
-            // Ensure question user is not null
             if (q.getUser() == null) {
                 q.setUser(new user());
             }
@@ -138,7 +128,6 @@ public class Scrapper {
                 a.setId(Integer.parseInt(answer.id().substring(7)));
                 a.setContent(answer.select(".s-prose.js-post-body").text());
 
-                // Ensure answer user is not null
                 user answerUser = new user();
                 answerUser.setNickName(answer.select(".user-details > a").text());
                 answerUser.setReputationScore(toNumber(answer.select(".reputation-score").text()));
@@ -146,8 +135,8 @@ public class Scrapper {
                 answerUser.setsBadge(emptyStringHandler(answer.select(".badge2 + .badgecount").text()));
                 answerUser.setbBadge(emptyStringHandler(answer.select(".badge3 + .badgecount").text()));
 
-                a.setUser(answerUser); // Assign user to answer
-                q.getAnswers().add(a); // Add answer to question
+                a.setUser(answerUser);
+                q.getAnswers().add(a);
             }
 
         } catch (IOException e) {
@@ -155,7 +144,6 @@ public class Scrapper {
         }
     }
 
-    // Removed duplicate main method to resolve the error
     /**
      * Get the list of scraped questions.
      *
@@ -175,39 +163,29 @@ public class Scrapper {
             LOGGER.info("Starting StackOverflow scraper...");
             Scrapper scraper = new Scrapper();
 
-            // Initialize database connection
             DatabaseConnection.initialize(
                     "jdbc:mysql://localhost:3306/scrappers",
                     "root",
                     "Y1a2s3!?");
             LOGGER.info("Database connection initialized");
 
-            // Scrape questions from the "Newest" tab, reduced to 2 pages due to IP
-            // detection
             scraper.questionScrapper("Newest", 2);
             LOGGER.info("Scraped " + scraper.getQuestions().size() + " questions");
 
-            // Scrape answers for each question and save to database
             int successCount = 0;
             for (question q : scraper.getQuestions()) {
                 try {
-                    // Scrape answers for this question
                     scraper.answerScrapper(q);
 
-                    // Save question and all its data to database
                     DatabaseConnection.saveCompleteQuestion(q);
 
-                    // Print question details
                     q.printQuestion();
 
                     successCount++;
 
-                    // Add extra delay between questions to avoid detection
-                    // scraper.sleepRandomTime(MIN_DELAY_MS * 2, MAX_DELAY_MS * 2);
-
                 } catch (Exception e) {
                     LOGGER.log(Level.SEVERE, "Error processing question ID " + q.getId(), e);
-                    // Continue with next question
+
                 }
             }
 
@@ -216,12 +194,10 @@ public class Scrapper {
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error in main execution", e);
         } finally {
-            // Properly shutdown database connection
             try {
                 LOGGER.info("Shutting down database connection...");
                 DatabaseConnection.shutdown();
 
-                // Give time for shutdown to complete
                 TimeUnit.SECONDS.sleep(2);
                 LOGGER.info("Shutdown complete");
             } catch (InterruptedException e) {

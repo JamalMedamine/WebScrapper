@@ -11,9 +11,6 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 import java.util.Objects;
 
-/**
- * Entity representing a StackOverflow answer.
- */
 @Entity
 @Table(name = "answers")
 public class answer {
@@ -24,32 +21,23 @@ public class answer {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    // An answer belongs to a question
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id")
     private question question;
 
-    // An answer is provided by a user
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private user author;
 
-    /**
-     * Default constructor required by Hibernate.
-     */
     public answer() {
     }
 
-    /**
-     * Parameterized constructor for creating answers with basic information.
-     */
     public answer(String content, question question, user author) {
         this.content = content;
         this.question = question;
         this.author = author;
     }
 
-    // Getters and setters
     public String getContent() {
         return content;
     }
@@ -82,9 +70,6 @@ public class answer {
         this.question = question;
     }
 
-    /**
-     * Print answer details to console.
-     */
     public void printAnswer() {
         System.out.println("answer id : " + this.id);
         System.out.println("answer content : " + this.content);

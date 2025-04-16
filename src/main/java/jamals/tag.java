@@ -11,9 +11,6 @@ import javax.persistence.ManyToMany;
 import javax.persistence.FetchType;
 import javax.persistence.Table;
 
-/**
- * Entity representing a StackOverflow tag.
- */
 @Entity
 @Table(name = "tags")
 public class tag {
@@ -21,24 +18,16 @@ public class tag {
     @Column(unique = true)
     private String tagName;
 
-    // A tag can be used in many questions
     @ManyToMany(mappedBy = "tags", fetch = FetchType.LAZY)
     private Set<question> questions = new HashSet<>();
 
-    /**
-     * Default constructor required by Hibernate.
-     */
     public tag() {
     }
 
-    /**
-     * Parameterized constructor for creating a tag with a name.
-     */
     public tag(String tagName) {
         this.tagName = tagName;
     }
 
-    // Getters and setters
     public String getTagName() {
         return tagName;
     }
